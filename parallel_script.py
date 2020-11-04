@@ -59,6 +59,7 @@ def get_xor_training_data(n_samples=BATCH_DIM, seed=42, std_dev=0.5):
 	np.random.seed(seed)
 	cluster_ids = np.random.randint(4, size=n_samples)
 	features = std_dev * np.random.normal(size=(n_samples,2))
+	print(features)
 	np.random.seed(None)
 	features[cluster_ids == 0,0] -= 1.0
 	features[cluster_ids == 0,1] -= 1.0
@@ -116,12 +117,18 @@ def mp_target_func(net_dims, parent_conn, child_conn, final_layer):
 	optimizer = torch.optim.Adam(net.parameters())
 	# Enter main loop.
 	epoch = 0
+	loss_values = []
 	while True:
 		epoch += 1
 		# Receive data from our parent.
 		backwards_flag, data = parent_conn.recv()
 		# Return on None.
 		if data is None:
+			plt.plot(loss_values)
+			plt.title('Loss')
+			plt.ylabel('Loss')
+			plt.xlabel('Epoch')
+			plt.savefig('loss.pdf')
 			child_conn.send((None,None))
 			return
 		# Zero gradients.
@@ -133,6 +140,7 @@ def mp_target_func(net_dims, parent_conn, child_conn, final_layer):
 				# If we're the last Module, calculate a loss.
 				target = child_conn.recv() # Receive the targets.
 				loss = torch.mean(torch.pow(output - target, 2))
+				loss_values.append(loss.item())
 				if epoch % 100 == 0:
 					print("epoch:", epoch ,"loss:", loss.item())
 				loss.backward()
@@ -216,9 +224,6 @@ class MPNet(torch.nn.Module):
 		for p in self.processes:
 			p.join()
 
-
-
-
 def plot_model_predictions(model, max_x=3, grid_points=40):
 	"""Plot the model predictions on the XOR dataset."""
 	# Make a grid of points.
@@ -232,6 +237,7 @@ def plot_model_predictions(model, max_x=3, grid_points=40):
 	prediction = prediction.reshape(grid_points,grid_points)
 	vmin, vmax = np.min(prediction), np.max(prediction)
 	# Plot predictions.
+	plt.close()
 	plt.imshow(prediction, extent=[-max_x,max_x,-max_x,max_x], \
 		interpolation='bicubic', cmap='viridis', vmin=vmin, vmax=vmax)
 	plt.colorbar()
@@ -267,6 +273,7 @@ if __name__ == '__main__':
 		model.forward_backward(features, targets)
 	# Plot.
 	plot_model_predictions(model)
+	#plot_loss()
 	# Clean up.
 	model.join()
 
