@@ -4,7 +4,6 @@ A simple example, now with paralllelism.
 TO DO
 -----
 - Make sure this is working correctly.
-- Add a loss plot.
 - Add batches, gpipe microbatches.
 """
 __date__ = "October 2020"
@@ -37,7 +36,6 @@ class NoOp(torch.nn.Module):
 		self.bias = None
 
 
-
 def get_xor_training_data(n_samples=BATCH_DIM, seed=42, std_dev=0.5):
 	"""
 	Get some training data for a simple XOR task.
@@ -59,7 +57,6 @@ def get_xor_training_data(n_samples=BATCH_DIM, seed=42, std_dev=0.5):
 	np.random.seed(seed)
 	cluster_ids = np.random.randint(4, size=n_samples)
 	features = std_dev * np.random.normal(size=(n_samples,2))
-	print(features)
 	np.random.seed(None)
 	features[cluster_ids == 0,0] -= 1.0
 	features[cluster_ids == 0,1] -= 1.0
@@ -70,12 +67,51 @@ def get_xor_training_data(n_samples=BATCH_DIM, seed=42, std_dev=0.5):
 	features[cluster_ids == 3,0] += 1.0
 	features[cluster_ids == 3,1] += 1.0
 	targets = np.zeros((n_samples,1))
+
 	targets[cluster_ids == 1] = 1.0
 	targets[cluster_ids == 2] = 1.0
 	# Convert to torch tensors.
 	features = torch.tensor(features).to(torch.float)
 	targets = torch.tensor(targets).to(torch.float)
 	return features, targets
+
+
+def get_gaussian_training_data(n_samples=BATCH_DIM, seed=42):
+	"""
+		Get some training data for a linearly separable task.
+
+		Parameters
+		----------
+		n_samples : int, optional
+			Number of samples.
+		seed : int, optional
+			Numpy random seed.
+
+		Returns
+		-------
+		features : torch.Tensor
+			shape: [n_samples,2]
+		targets : torch.Tensor
+			shape: [n_samples,1]
+		"""
+	np.random.seed(seed)
+	features = np.zeros((n_samples, 2))
+	f1 = np.random.multivariate_normal([-1,-1], [[.1, .3], [.3,.1]], n_samples//2)
+	f2 = np.random.multivariate_normal([1,1], [[.3, .1], [.1,.3]], n_samples//2)
+	features = np.concatenate((f1, f2))
+	t1 = np.zeros((n_samples//2, 1))
+	t2 = np.ones((n_samples//2, 1))
+	targets =  np.concatenate((t1, t2))
+	# Convert to torch tensors.
+	features = torch.tensor(features).to(torch.float)
+	targets = torch.tensor(targets).to(torch.float)
+	return features, targets
+
+
+def get_circle_training_data(n_samples=BATCH_DIM, seed=42, std_dev=0.5):
+	"""
+	TODO: make circle plot from http://playground.tensorflow.org/
+	"""
 
 
 def make_dense_net(layer_dims, include_no_op=True, include_last_relu=True):
@@ -122,45 +158,54 @@ def mp_target_func(net_dims, parent_conn, child_conn, final_layer):
 		epoch += 1
 		# Receive data from our parent.
 		backwards_flag, data = parent_conn.recv()
+
 		# Return on None.
 		if data is None:
 			plt.plot(loss_values)
 			plt.title('Loss')
 			plt.ylabel('Loss')
 			plt.xlabel('Epoch')
-			plt.savefig('loss.pdf')
+			plt.savefig('batch_xor_loss.pdf')
 			child_conn.send((None,None))
 			return
-		# Zero gradients.
-		optimizer.zero_grad()
-		# Make a forward pass.
-		output = net(data)
-		if backwards_flag: # If we're going to do a backwards pass:
-			if final_layer:
-				# If we're the last Module, calculate a loss.
-				target = child_conn.recv() # Receive the targets.
-				loss = torch.mean(torch.pow(output - target, 2))
-				loss_values.append(loss.item())
-				if epoch % 100 == 0:
-					print("epoch:", epoch ,"loss:", loss.item())
-				loss.backward()
-			else:
-				# Otherwise, pass the output to our children.
-				child_conn.send((True, output.detach()))
-				grads = child_conn.recv()
-				# Fake a loss with the correct gradients.
-				loss = torch.sum(output * grads)
-				loss.backward()
-				# output.backward(gradient=grads) # should do the same thing as above
-			# Pass gradients back.
-			parent_conn.send(net[0].bias.grad)
-			# Update this module's parameters.
-			optimizer.step()
-			# And zero out the NoOp layer.
-			net[0].zero()
-		else: # If we're just doing a forwards pass:
-			# Just feed the activations to the child.
-			child_conn.send((False, output.detach()))
+		#print(data.shape)
+		permutation = torch.randperm(data.size()[0])
+
+		for i in range(0, data.size()[0], BATCH_DIM):
+
+			# Zero gradients.
+			optimizer.zero_grad()
+			# Make a forward pass.
+			indices = permutation[i:i+BATCH_DIM]
+			batch_data = data[indices]
+			output = net(batch_data)
+			if backwards_flag: # If we're going to do a backwards pass:
+				if final_layer:
+					# If we're the last Module, calculate a loss.
+					target = child_conn.recv() # Receive the targets.
+					batch_target = target[indices]
+					loss = torch.mean(torch.pow(output - batch_target, 2))
+					loss_values.append(loss.item())
+					if epoch % 100 == 0:
+						print("epoch:", epoch ,"loss:", loss.item())
+					loss.backward()
+				else:
+					# Otherwise, pass the output to our children.
+					child_conn.send((True, output.detach()))
+					grads = child_conn.recv()
+					# Fake a loss with the correct gradients.
+					loss = torch.sum(output * grads)
+					loss.backward()
+					# output.backward(gradient=grads) # should do the same thing as above
+				# Pass gradients back.
+				parent_conn.send(net[0].bias.grad)
+				# Update this module's parameters.
+				optimizer.step()
+				# And zero out the NoOp layer.
+				net[0].zero()
+			else: # If we're just doing a forwards pass:
+				# Just feed the activations to the child.
+				child_conn.send((False, output.detach()))
 
 
 
@@ -257,7 +302,7 @@ def plot_model_predictions(model, max_x=3, grid_points=40):
 	plt.ylabel('Feature 1')
 	plt.xlabel('Feature 2')
 	plt.title('Network Predictions')
-	plt.savefig('temp.pdf')
+	plt.savefig('batch_xor_plot.pdf')
 
 
 
@@ -273,7 +318,6 @@ if __name__ == '__main__':
 		model.forward_backward(features, targets)
 	# Plot.
 	plot_model_predictions(model)
-	#plot_loss()
 	# Clean up.
 	model.join()
 
