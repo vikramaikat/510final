@@ -3,11 +3,9 @@ A simple example, now with paralllelism.
 
 TO DO
 -----
-- Make sure this is working correctly.
-- Add a loss plot.
-- Add batches, gpipe microbatches.
+- Implement gpipe batches, probably in another file.
 """
-__date__ = "October 2020"
+__date__ = "October - November 2020"
 
 from matplotlib.cm import get_cmap
 import matplotlib.pyplot as plt
@@ -17,7 +15,11 @@ import os
 import torch
 torch.autograd.set_detect_anomaly(True) # useful for debugging
 
-BATCH_DIM = 100
+BATCH_SIZE = 25
+NUM_BATCHES = 4
+DSET_SIZE = BATCH_SIZE * NUM_BATCHES
+LR = 1e-4 # learning rate
+
 
 
 class NoOp(torch.nn.Module):
@@ -38,7 +40,7 @@ class NoOp(torch.nn.Module):
 
 
 
-def get_xor_training_data(n_samples=BATCH_DIM, seed=42, std_dev=0.5):
+def get_xor_training_data(n_samples=DSET_SIZE, seed=42, std_dev=0.5):
 	"""
 	Get some training data for a simple XOR task.
 
@@ -113,12 +115,12 @@ def mp_target_func(net_dims, parent_conn, child_conn, final_layer):
 	# Make a network.
 	net = make_dense_net(net_dims, include_last_relu=(not final_layer))
 	# Make an optimizer.
-	optimizer = torch.optim.Adam(net.parameters())
+	optimizer = torch.optim.Adam(net.parameters(), lr=LR)
 	# Enter main loop.
-	epoch = 0
+	batch = 0
 	loss_values = []
 	while True:
-		epoch += 1
+		batch += 1
 		# Receive data from our parent.
 		backwards_flag, data = parent_conn.recv()
 		# Return on None.
@@ -139,8 +141,8 @@ def mp_target_func(net_dims, parent_conn, child_conn, final_layer):
 				target = child_conn.recv() # Receive the targets.
 				loss = torch.mean(torch.pow(output - target, 2))
 				loss_values.append(loss.item())
-				if epoch % 100 == 0:
-					print("epoch:", epoch ,"loss:", loss.item())
+				if batch % 100 == 0:
+					print("batch:", batch ,"loss:", loss.item())
 				loss.backward()
 			else:
 				# Otherwise, pass the output to our children.
@@ -175,7 +177,11 @@ class MPNet(torch.nn.Module):
 	"""
 
 	def __init__(self, net_dims):
-		""" """
+		"""
+		Parameters
+		----------
+		net_dims : ...
+		"""
 		super(MPNet, self).__init__()
 		# Make all the pipes.
 		self.pipes = [mp.Pipe() for _ in range(len(net_dims)+1)]
@@ -212,7 +218,7 @@ class MPNet(torch.nn.Module):
 
 
 	def join(self):
-		""" """
+		"""Join all the processes."""
 		# Send a kill signal.
 		self.pipes[0][0].send((None,None))
 		# Wait for it to come round.
@@ -261,13 +267,12 @@ def plot_model_predictions(model, max_x=3, grid_points=40):
 
 
 def plot_loss(loss_values, filename='loss.pdf'):
-	"""Make a loss plot."""
+	"""Make a loss plot: log MSE by batch"""
 	_, ax = plt.subplots(figsize=(3.5,3))
-	plt.plot(loss_values)
+	plt.plot(np.log(loss_values), alpha=0.7, lw=0.7)
 	plt.title('Loss History')
-	plt.ylabel('Loss (MSE)')
-	plt.xlabel('Epoch')
-	plt.ylim(0.0, None)
+	plt.ylabel('log MSE')
+	plt.xlabel('Batch')
 	ax.spines['top'].set_visible(False)
 	ax.spines['right'].set_visible(False)
 	plt.tight_layout()
@@ -279,13 +284,19 @@ def plot_loss(loss_values, filename='loss.pdf'):
 if __name__ == '__main__':
 	# Get training data.
 	features, targets = get_xor_training_data()
+	# Make a Dataset.
+	dset = torch.utils.data.TensorDataset(features, targets)
+	# Make a DataLoader.
+	loader = torch.utils.data.DataLoader(dset, batch_size=BATCH_SIZE, \
+			shuffle=True)
 	# Define network dimensions.
 	net_dims = [[2,10,10], [10,10,1]]
 	# Make the model.
 	model = MPNet(net_dims)
 	# Send in the features.
 	for epoch in range(1000):
-		model.forward_backward(features, targets)
+		for features, targets in loader:
+			model.forward_backward(features, targets)
 	# Plot.
 	plot_model_predictions(model)
 	# Clean up.
