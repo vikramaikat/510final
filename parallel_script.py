@@ -59,7 +59,6 @@ def get_xor_training_data(n_samples=BATCH_DIM, seed=42, std_dev=0.5):
 	np.random.seed(seed)
 	cluster_ids = np.random.randint(4, size=n_samples)
 	features = std_dev * np.random.normal(size=(n_samples,2))
-	print(features)
 	np.random.seed(None)
 	features[cluster_ids == 0,0] -= 1.0
 	features[cluster_ids == 0,1] -= 1.0
@@ -124,11 +123,10 @@ def mp_target_func(net_dims, parent_conn, child_conn, final_layer):
 		backwards_flag, data = parent_conn.recv()
 		# Return on None.
 		if data is None:
-			plt.plot(loss_values)
-			plt.title('Loss')
-			plt.ylabel('Loss')
-			plt.xlabel('Epoch')
-			plt.savefig('loss.pdf')
+			# If we're the final layer, plot the loss history.
+			if final_layer:
+				plot_loss(loss_values)
+			# Then propogate the None signal.
 			child_conn.send((None,None))
 			return
 		# Zero gradients.
@@ -224,6 +222,8 @@ class MPNet(torch.nn.Module):
 		for p in self.processes:
 			p.join()
 
+
+
 def plot_model_predictions(model, max_x=3, grid_points=40):
 	"""Plot the model predictions on the XOR dataset."""
 	# Make a grid of points.
@@ -260,6 +260,21 @@ def plot_model_predictions(model, max_x=3, grid_points=40):
 	plt.savefig('temp.pdf')
 
 
+def plot_loss(loss_values, filename='loss.pdf'):
+	"""Make a loss plot."""
+	_, ax = plt.subplots(figsize=(3.5,3))
+	plt.plot(loss_values)
+	plt.title('Loss History')
+	plt.ylabel('Loss (MSE)')
+	plt.xlabel('Epoch')
+	plt.ylim(0.0, None)
+	ax.spines['top'].set_visible(False)
+	ax.spines['right'].set_visible(False)
+	plt.tight_layout()
+	plt.savefig(filename)
+	plt.close('all')
+
+
 
 if __name__ == '__main__':
 	# Get training data.
@@ -273,7 +288,6 @@ if __name__ == '__main__':
 		model.forward_backward(features, targets)
 	# Plot.
 	plot_model_predictions(model)
-	#plot_loss()
 	# Clean up.
 	model.join()
 
