@@ -1,9 +1,6 @@
 """
-A simple example, now with paralllelism.
+A simple example, now with paralllelism and Gpipe-style microbatches.
 
-TO DO
------
-- Print losses by epoch, not batch.
 """
 __date__ = "October - November 2020"
 
@@ -36,7 +33,8 @@ class NoOp(torch.nn.Module):
 
 	def zero(self):
 		"""Return to None."""
-		self.bias = None
+		with torch.no_grad():
+			self.bias.grad = 0.0 * self.bias.grad
 
 
 
@@ -111,56 +109,80 @@ def mp_target_func(net_dims, parent_conn, child_conn, final_layer):
 		List of layer dimensions
 	parent_conn : multiprocessing.connection.Connection
 	child_conn : multiprocessing.connection.Connection
+	final_layer : bool
 	"""
 	# Make a network.
 	net = make_dense_net(net_dims, include_last_relu=(not final_layer))
 	# Make an optimizer.
 	optimizer = torch.optim.Adam(net.parameters(), lr=LR)
 	# Enter main loop.
-	batch = 0
+	epoch = 0
 	loss_values = []
 	while True:
-		batch += 1
-		# Receive data from our parent.
-		backwards_flag, data = parent_conn.recv()
-		# Return on None.
-		if data is None:
-			# If we're the final layer, plot the loss history.
+		epoch += 1
+		microbatch_losses, outputs = [], []
+
+		# Perform forward passes.
+		for batch in range(NUM_BATCHES):
+			# Receive data from our parent.
+			backwards_flag, data = parent_conn.recv()
+			# Return on None.
+			if data is None:
+				# If we're the final layer, plot the loss history.
+				if final_layer:
+					plot_loss(loss_values)
+				# Then propogate the death signal.
+				child_conn.send((None,None))
+				return
+			# Make a forward pass.
+			output = net(data)
+			# If we're just doing a forwards pass, just feed outputs to child.
+			if not backwards_flag:
+				child_conn.send((False, output.detach()))
+				continue
+			# If we're the last layer, calculate a loss.
 			if final_layer:
-				plot_loss(loss_values)
-			# Then propogate the None signal.
-			child_conn.send((None,None))
-			return
+				# Receive the targets.
+				target = child_conn.recv()
+				# Calculate a loss.
+				loss = torch.mean(torch.pow(output - target, 2))
+				loss = loss / NUM_BATCHES
+				microbatch_losses.append(loss)
+			else:
+				# Otherwise, pass the output to our child.
+				child_conn.send((True, output.detach()))
+				outputs.append(output)
+
+		# If we're not doing a backwards flag, wait for more data.
+		if not backwards_flag:
+			continue
+
+		# If we're the last layer, record and print loss.
+		if final_layer:
+			epoch_loss = sum(i.item() for i in microbatch_losses)
+			loss_values.append(epoch_loss)
+			if epoch % 100 == 0:
+				print("epoch:", epoch ,"loss:", epoch_loss)
+
 		# Zero gradients.
 		optimizer.zero_grad()
-		# Make a forward pass.
-		output = net(data)
-		if backwards_flag: # If we're going to do a backwards pass:
+
+		# Perform backward passes.
+		for batch in range(NUM_BATCHES-1,-1,-1):
+			# Perform the backward pass.
 			if final_layer:
-				# If we're the last Module, calculate a loss.
-				target = child_conn.recv() # Receive the targets.
-				loss = torch.mean(torch.pow(output - target, 2))
-				loss_values.append(loss.item())
-				if batch % 100 == 0:
-					print("batch:", batch ,"loss:", loss.item())
-				loss.backward()
+				microbatch_losses[batch].backward()
 			else:
-				# Otherwise, pass the output to our children.
-				child_conn.send((True, output.detach()))
 				grads = child_conn.recv()
-				# Fake a loss with the correct gradients.
-				loss = torch.sum(output * grads)
-				loss.backward()
-				# output.backward(gradient=grads) # should do the same thing as above
-			# Pass gradients back.
+				outputs[batch].backward(gradient=grads)
+			# Pass gradients back to the parent.
 			parent_conn.send(net[0].bias.grad)
-			# Update this module's parameters.
-			optimizer.step()
 			# And zero out the NoOp layer.
 			net[0].zero()
-		else: # If we're just doing a forwards pass:
-			# Just feed the activations to the child.
-			child_conn.send((False, output.detach()))
+		# Update this module's parameters.
+		optimizer.step()
+		# And zero out the NoOp layer.
+		net[0].zero()
 
 
 
@@ -172,7 +194,6 @@ class MPNet(torch.nn.Module):
 
 	TO DO
 	-----
-	* test
 	* save/load models
 	"""
 
@@ -196,6 +217,7 @@ class MPNet(torch.nn.Module):
 					args=(sub_net_dims, conn_1, conn_2, final_layer),
 			)
 			self.processes.append(p)
+			# Release the process into the wild.
 			p.start()
 
 
@@ -208,13 +230,14 @@ class MPNet(torch.nn.Module):
 		return prediction
 
 
-	def forward_backward(self, x, y):
+	def forward_backward(self, x, y, wait_num=1):
 		"""Both forward and backward passes."""
 		# Send features to the first parition.
 		self.pipes[0][0].send((True, x))
 		# Send targets to the last parition.
 		self.pipes[-1][1].send(y)
-		_ = self.pipes[0][0].recv() # Wait for gradients to come back.
+		for i in range(wait_num):
+			_ = self.pipes[0][0].recv() # Wait for gradients to come back.
 
 
 	def join(self):
@@ -295,8 +318,9 @@ if __name__ == '__main__':
 	model = MPNet(net_dims)
 	# Send in the features.
 	for epoch in range(1000):
-		for features, targets in loader:
-			model.forward_backward(features, targets)
+		for batch, (features, targets) in enumerate(loader):
+			wait_num = NUM_BATCHES * int(batch == NUM_BATCHES-1)
+			model.forward_backward(features, targets, wait_num=wait_num)
 	# Plot.
 	plot_model_predictions(model)
 	# Clean up.
