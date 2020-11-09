@@ -1,16 +1,13 @@
 """
-A simple example showing how we can chain together torch Modules using the
-torch Sequntial abstraction. All the gradients are handled automatically.
-
-Note that torch.nn.Sequential subclasses torch.nn.Module
+Toy data: noisy XOR classification.
 
 """
-__date__ = "October 2020"
+__date__ = "November 2020"
 
+from matplotlib.cm import get_cmap
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-torch.autograd.set_detect_anomaly(True) # useful for debugging
 
 
 
@@ -53,50 +50,18 @@ def get_xor_training_data(n_samples=100, seed=42, std_dev=0.5):
 	return features, targets
 
 
-def make_dense_net(layer_dims):
+
+def plot_model_predictions(model, max_x=3, grid_points=40, img_fn='temp.pdf'):
 	"""
-	Make a network with ReLUs and dense layers.
+	Plot the model predictions on the XOR dataset.
 
 	Parameters
 	----------
-	layer_dims : list of int
-		List of layer dimensions
+	model :
+	max_x : float, optional
+	grid_points : int, optional
+	img_fn : str, optional
 	"""
-	assert len(layer_dims) >= 2
-	layer_list = []
-	for i in range(len(layer_dims)-1):
-		layer_list.append(torch.nn.Linear(layer_dims[i], layer_dims[i+1]))
-		if i != len(layer_dims)-2:
-			layer_list.append(torch.nn.ReLU())
-	return torch.nn.Sequential(*layer_list).to(torch.float)
-
-
-def training_run(model, epochs=1001, print_freq=100):
-	"""
-	Train the model.
-
-	Parameters
-	----------
-	model : torch.nn.Module
-		Network to train
-	epochs : int, optional
-		Training epochs
-	print_freq : int, optional
-	"""
-	features, targets = get_xor_training_data()
-	optimizer = torch.optim.Adam(model.parameters())
-	for epoch in range(epochs):
-		optimizer.zero_grad()
-		prediction = model(features)
-		loss = torch.mean(torch.pow(prediction - targets,2))
-		if epoch % print_freq == 0:
-			print("epoch", epoch, "loss", loss.item())
-		loss.backward()
-		optimizer.step()
-
-
-def plot_model_predictions(model, max_x=3, grid_points=40):
-	""" """
 	# Make a grid of points.
 	x = torch.linspace(-max_x,max_x,grid_points).to(torch.float)
 	y = torch.linspace(-max_x,max_x,grid_points).to(torch.float)
@@ -106,34 +71,34 @@ def plot_model_predictions(model, max_x=3, grid_points=40):
 	with torch.no_grad():
 		prediction = model(grid).detach().cpu().numpy()
 	prediction = prediction.reshape(grid_points,grid_points)
+	vmin, vmax = np.min(prediction), np.max(prediction)
 	# Plot predictions.
 	plt.imshow(prediction, extent=[-max_x,max_x,-max_x,max_x], \
-		interpolation='bicubic')
+		interpolation='bicubic', cmap='viridis', vmin=vmin, vmax=vmax)
 	plt.colorbar()
 	# Show training data.
 	features, targets = get_xor_training_data()
 	features, targets = features.numpy(), targets.numpy().flatten()
 	idx_0 = np.argwhere(targets == 0)
 	idx_1 = np.argwhere(targets == 1)
-	plt.scatter(features[idx_0,0].flatten(), features[idx_0,1].flatten(), c='r')
-	plt.scatter(features[idx_1,0].flatten(), features[idx_1,1].flatten(), c='k')
+	cmap = get_cmap('viridis')
+	color_0, color_1 = (0.0-vmin)/(vmax - vmin), (1.0-vmin)/(vmax - vmin)
+	color_0, color_1 = np.array(cmap(color_0)), np.array(cmap(color_1))
+	color_0, color_1 = color_0.reshape(1,-1), color_1.reshape(1,-1)
+	plt.scatter(features[idx_0,0].flatten(), features[idx_0,1].flatten(), \
+			c=color_1, edgecolors='k')
+	plt.scatter(features[idx_1,0].flatten(), features[idx_1,1].flatten(), \
+			c=color_0, edgecolors='k')
 	plt.ylabel('Feature 1')
 	plt.xlabel('Feature 2')
 	plt.title('Network Predictions')
-	plt.savefig('temp.pdf')
+	plt.savefig(img_fn)
+	plt.close('all')
 
 
 
 if __name__ == '__main__':
-	# Make two small networks.
-	net_1 = make_dense_net([2,10,10])
-	net_2 = make_dense_net([10,10,1])
-	# Combine the networks.
-	combo_model = torch.nn.Sequential(net_1, net_2)
-	# Train.
-	training_run(combo_model)
-	# Plot.
-	plot_model_predictions(combo_model)
+	pass
 
 
 ###
