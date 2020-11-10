@@ -9,9 +9,10 @@ __date__ = "October - November 2020"
 import multiprocessing as mp
 import numpy as np
 import torch
+import time
 
 from .distributed_model import DistributedModel
-from .utils import make_dense_net, plot_loss
+from .utils import make_dense_net, plot_loss, plot_performance
 
 # torch.autograd.set_detect_anomaly(True) # useful for debugging
 
@@ -41,11 +42,16 @@ def mp_target_func(net_dims, parent_conn, child_conn, final_layer, num_batches):
 	# Enter main loop.
 	epoch = 0
 	loss_values = []
+	data_samples = []
+	time_values = []
+	start_time = time.time()
+	total_samples = 0
 	while True:
 		epoch += 1
 		batch_losses = []
 
 		for batch in range(num_batches):
+			total_samples += 25
 			# Receive data from our parent.
 			backwards_flag, data = parent_conn.recv()
 			# Return on None.
@@ -53,6 +59,7 @@ def mp_target_func(net_dims, parent_conn, child_conn, final_layer, num_batches):
 				# If we're the final layer, plot the loss history.
 				if final_layer:
 					plot_loss(loss_values)
+					plot_performance(loss_values, time_values, data_samples)
 				# Then propogate the None signal.
 				child_conn.send((None,None))
 				return
@@ -87,7 +94,10 @@ def mp_target_func(net_dims, parent_conn, child_conn, final_layer, num_batches):
 		if final_layer and backwards_flag and (epoch % 100 == 0):
 			epoch_loss = sum(batch_losses) / num_batches
 			loss_values.append(epoch_loss)
+			data_samples.append(total_samples)
+			time_values.append(time.time() - start_time)
 			print("epoch:", epoch ,"loss:", epoch_loss)
+			print("Time:", time.time() - start_time ,"Samples:", total_samples)
 
 
 
