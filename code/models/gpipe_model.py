@@ -1,5 +1,5 @@
 """
-A simple example, now with paralllelism and Gpipe-style microbatches.
+A simple example, now with parallelism and Gpipe-style microbatches.
 
 """
 __date__ = "October - November 2020"
