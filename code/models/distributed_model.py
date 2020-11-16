@@ -33,6 +33,20 @@ class DistributedModel(torch.nn.Module):
 		raise NotImplementedError
 
 
+	def test_forward(self, x, y):
+		"""
+		Just the forward pass! But log the loss as a test loss.
+
+		Parameters
+		----------
+		x : torch.Tensor
+			Features
+		y_est : torch.Tensor
+			Estimated targets
+		"""
+		raise NotImplementedError
+
+
 	def forward_backward(self, x, y):
 		"""
 		Perform both the forward and backward passes.

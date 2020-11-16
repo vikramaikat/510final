@@ -18,6 +18,9 @@ from .utils import make_dense_net, plot_loss, plot_performance
 # torch.autograd.set_detect_anomaly(True) # useful for debugging
 
 LR = 1e-3 # learning rate
+FORWARD_FLAG = 1
+TEST_FORWARD_FLAG = 2
+
 
 
 def mp_target_func(net_dims, parent_conn, child_conn, target_conn, final_layer,\
@@ -55,7 +58,8 @@ def mp_target_func(net_dims, parent_conn, child_conn, target_conn, final_layer,\
 	optimizer = torch.optim.Adam(params, lr=LR)
 	# Enter main loop.
 	epoch = 0
-	loss_values = []
+	train_loss_values, train_loss_times = [], []
+	test_loss_values, test_loss_times, test_loss_epochs = [], [], []
 	start_time = time.perf_counter()
 	while True:
 		epoch += 1
@@ -70,7 +74,8 @@ def mp_target_func(net_dims, parent_conn, child_conn, target_conn, final_layer,\
 			if data is None:
 				# If we're the final layer, plot the loss history.
 				if final_layer:
-					plot_loss(loss_values)
+					plot_loss(train_loss_values, train_loss_times, \
+							test_loss_values, test_loss_times, test_loss_epochs)
 				# Then propogate the None signal.
 				child_conn.send((None,None,None))
 				return
@@ -79,6 +84,7 @@ def mp_target_func(net_dims, parent_conn, child_conn, target_conn, final_layer,\
 			# batch. Send the loss so that the final cell can keep an accurate
 			# log.
 			if counter < 0:
+				assert backwards_flag
 				# Empty target pipe.
 				_ = target_conn.recv()
 				# Send signal.
@@ -162,17 +168,37 @@ def mp_target_func(net_dims, parent_conn, child_conn, target_conn, final_layer,\
 					# And zero out the NoOp layer.
 					net[0].zero()
 			else: # If we're just doing a forward pass:
+				if final_layer and counter == TEST_FORWARD_FLAG:
+					target = target_conn.recv() # Receive the targets.
+					with torch.no_grad():
+						loss = torch.mean(torch.pow(cell_output - target, 2))
+					batch_losses.append(loss.item())
 				# Just feed the activations to the child.
-				child_conn.send((False, 1, cell_output.detach()))
+				child_conn.send((False, counter, cell_output.detach()))
 
-		# Log the time and training loss.
+		if not final_layer:
+			continue
+
+		if not backwards_flag and counter == FORWARD_FLAG:
+			epoch -= 1
+			continue
+
+		# Log the time and loss.
 		epoch_loss = round(sum(batch_losses) / num_batches, 7)
-		loss_values.append(epoch_loss)
 		elapsed_time = round(time.perf_counter() - start_time, 5)
 
-		# Print out a loss.
-		if final_layer and backwards_flag and (epoch % 100 == 0):
-			print("epoch:", epoch ,"loss:", epoch_loss, "time:", elapsed_time)
+		if backwards_flag:
+			train_loss_values.append(epoch_loss)
+			train_loss_times.append(elapsed_time)
+			# Print out a loss.
+			if final_layer and backwards_flag and (epoch % 100 == 0):
+				print("epoch:", epoch ,"loss:", epoch_loss, \
+						"time:", elapsed_time)
+		else:
+			epoch -= 1 # Don't count this epoch.
+			test_loss_values.append(epoch_loss)
+			test_loss_times.append(elapsed_time)
+			test_loss_epochs.append(epoch)
 
 
 
@@ -188,7 +214,7 @@ class RefinementModel(DistributedModel):
 		"""
 		Parameters
 		----------
-		net_dims : ...
+		net_dims : list of list of int
 		num_batches : int
 		"""
 		super(RefinementModel, self).__init__()
@@ -224,14 +250,24 @@ class RefinementModel(DistributedModel):
 
 	def forward(self, x):
 		"""Just the forward pass!"""
-		# Send features to the first parition.
-		self.pipes[0][0].send((False, 1, x))
-		# Get predictions from last partition.
+		# Send features to the first cell.
+		self.pipes[0][0].send((False, FORWARD_FLAG, x))
+		# Get predictions from last cell.
 		_, _, prediction = self.pipes[-1][1].recv()
 		return prediction
 
 
-	def forward_backward(self, x, y, wait_num=None, counter=None):
+	def test_forward(self, x, y, wait=False):
+		"""Forward pass without gradients, but log the loss."""
+		# Send features to the first cell.
+		self.pipes[0][0].send((False, TEST_FORWARD_FLAG, x))
+		# Send targets to the last cell.
+		self.target_pipes[-1][0].send(y)
+		# Wait for something to come back.
+		_ = self.pipes[-1][1].recv()
+
+
+	def forward_backward(self, x, y, wait=False, counter=None):
 		"""Both forward and backward passes."""
 		if counter is None:
 			counter = np.random.randint(2*len(self.net_dims)-1)

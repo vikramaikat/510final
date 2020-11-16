@@ -51,7 +51,8 @@ def get_xor_training_data(n_samples=100, seed=42, std_dev=0.5):
 
 
 
-def plot_model_predictions(model, max_x=3, grid_points=40, img_fn='temp.pdf'):
+def plot_model_predictions(model, max_x=3, grid_points=80, \
+	img_fn='xor_predictions.pdf'):
 	"""
 	Plot the model predictions on the XOR dataset.
 
@@ -92,6 +93,7 @@ def plot_model_predictions(model, max_x=3, grid_points=40, img_fn='temp.pdf'):
 	plt.ylabel('Feature 1')
 	plt.xlabel('Feature 2')
 	plt.title('Network Predictions')
+	# Save and close.
 	plt.savefig(img_fn)
 	plt.close('all')
 
