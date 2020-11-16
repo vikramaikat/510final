@@ -1,8 +1,27 @@
 # 510final
 
 ### TO DO
-1) Add some profiling stuff
-2) Add unit tests to check gradients
-3) Evaluate test set loss
-4) Test on more cores using a real dataset -- maybe MNIST?
-5) Check out possibilities for setting CPU affinities on Linux: https://stackoverflow.com/questions/36172101/designate-specific-cpu-for-a-process-python-multiprocessing
+* Make sure sequential, basic parallel, and gpipe have similar loss histories.
+* Add some profiling stuff
+* Evaluate test set loss
+* Implement basic local learning
+
+
+### File Summaries
+
+#### models/utils.py
+This file is used to store functions that are useful across models. Here we have the basic structure
+for the neural net, the loss plot and the performance plot functions.
+
+#### models/no_op.py
+Define a No-Op Pytorch Module that will be useful for caching gradients.
+
+#### models/gpipe_model.py
+
+#### models/distributed_model.py
+
+#### models/basic_distributed_model.py
+
+#### data/xor_data.py
+
+#### temp_plot_outputs folder

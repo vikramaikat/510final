@@ -41,7 +41,7 @@ def plot_loss(loss_values, img_fn='loss.pdf'):
 	plt.plot(np.log(loss_values), alpha=0.7, lw=0.7)
 	plt.title('Loss History')
 	plt.ylabel('log MSE')
-	plt.xlabel('Epoch')
+	plt.xlabel('Epoch (in 100s)')
 	ax.spines['top'].set_visible(False)
 	ax.spines['right'].set_visible(False)
 	plt.tight_layout()

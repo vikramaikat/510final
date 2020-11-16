@@ -16,11 +16,10 @@ from .utils import make_dense_net, plot_loss, plot_performance
 
 # torch.autograd.set_detect_anomaly(True) # useful for debugging
 
-LR = 1e-3 # learning rate
+LR = 1e-3  # learning rate
 
 
-
-def mp_target_func(net_dims, parent_conn, child_conn, final_layer, num_batches):
+def mp_target_func(net_dims, parent_conn, child_conn, final_layer, num_batches, verbose_mode):
 	"""
 	Spawn a torch.nn.Module and wait for data.
 
@@ -96,9 +95,9 @@ def mp_target_func(net_dims, parent_conn, child_conn, final_layer, num_batches):
 			loss_values.append(epoch_loss)
 			data_samples.append(total_samples)
 			time_values.append(time.time() - start_time)
-			print("epoch:", epoch ,"loss:", epoch_loss)
-			print("Time:", time.time() - start_time ,"Samples:", total_samples)
-
+			if verbose_mode:
+				print("epoch:", epoch ,"loss:", epoch_loss)
+				print("Time:", time.time() - start_time ,"Samples:", total_samples)
 
 
 class BasicDistributedModel(DistributedModel):
@@ -109,7 +108,7 @@ class BasicDistributedModel(DistributedModel):
 
 	"""
 
-	def __init__(self, net_dims, num_batches):
+	def __init__(self, net_dims, num_batches, verbose_mode=True):
 		"""
 		Parameters
 		----------
@@ -118,6 +117,7 @@ class BasicDistributedModel(DistributedModel):
 		"""
 		super(BasicDistributedModel, self).__init__()
 		self.num_batches = num_batches
+		self.verbose_mode = verbose_mode
 		# Make all the pipes.
 		self.pipes = [mp.Pipe() for _ in range(len(net_dims)+1)]
 		# Make each network.
@@ -134,11 +134,11 @@ class BasicDistributedModel(DistributedModel):
 							conn_2,
 							final_layer,
 							self.num_batches,
+							self.verbose_mode,
 					),
 			)
 			self.processes.append(p)
 			p.start()
-
 
 	def forward(self, x):
 		"""Just the forward pass!"""
@@ -148,7 +148,6 @@ class BasicDistributedModel(DistributedModel):
 		_, prediction = self.pipes[-1][1].recv()
 		return prediction
 
-
 	def forward_backward(self, x, y, wait_num=None):
 		"""Both forward and backward passes."""
 		# Send features to the first parition.
@@ -156,7 +155,7 @@ class BasicDistributedModel(DistributedModel):
 		# Send targets to the last parition.
 		self.pipes[-1][1].send(y)
 		_ = self.pipes[0][0].recv() # Wait for gradients to come back.
-
+		# print(_)
 
 	def join(self):
 		"""Join all the processes."""
@@ -168,7 +167,6 @@ class BasicDistributedModel(DistributedModel):
 		# Join everything.
 		for p in self.processes:
 			p.join()
-
 
 
 if __name__ == '__main__':
