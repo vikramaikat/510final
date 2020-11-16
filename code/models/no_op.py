@@ -1,5 +1,5 @@
 """
-Define a No-Op Pytorch Module that will be useful for caching gradients.
+Define a No-Op Pytorch Module that's useful for caching gradients.
 
 """
 __date__ = "November 2020"
@@ -21,7 +21,7 @@ class NoOp(torch.nn.Module):
 		return self.bias + x
 
 	def zero(self):
-		"""Return to None."""
+		"""Zero out the gradients."""
 		with torch.no_grad():
 			self.bias.grad = 0.0 * self.bias.grad
 
