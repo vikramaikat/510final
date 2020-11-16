@@ -10,17 +10,17 @@ import torch
 from code.data.xor_data import get_xor_training_data, plot_model_predictions
 from code.models.gpipe_model import GpipeModel
 from code.models.basic_distributed_model import BasicDistributedModel
-from code.models.local_learn_backwards import LocalBackwardsModel
+from code.models.refinement_model import RefinementModel
 
 
 BATCH_SIZE = 25
 NUM_BATCHES = 4
 DSET_SIZE = BATCH_SIZE * NUM_BATCHES
-NET_DIMS = [[2,10,10], [10,10,1]]
+NET_DIMS = [[2,10,10], [10,10,10], [10,10,1]]
 MODEL_OPTIONS = {
 	1: BasicDistributedModel,
 	2: GpipeModel,
-	3: LocalBackwardsModel,
+	3: RefinementModel,
 }
 USAGE_STR = "$ python training_script.py [model_type]\n\tmodel_type options:\n"
 for option in sorted(MODEL_OPTIONS.keys()):

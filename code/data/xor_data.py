@@ -57,7 +57,7 @@ def plot_model_predictions(model, max_x=3, grid_points=40, img_fn='temp.pdf'):
 
 	Parameters
 	----------
-	model :
+	model : DistributedModel
 	max_x : float, optional
 	grid_points : int, optional
 	img_fn : str, optional
@@ -74,7 +74,7 @@ def plot_model_predictions(model, max_x=3, grid_points=40, img_fn='temp.pdf'):
 	vmin, vmax = np.min(prediction), np.max(prediction)
 	# Plot predictions.
 	plt.imshow(prediction, extent=[-max_x,max_x,-max_x,max_x], \
-		interpolation='bicubic', cmap='viridis', vmin=vmin, vmax=vmax)
+			interpolation='bicubic', cmap='viridis', vmin=vmin, vmax=vmax)
 	plt.colorbar()
 	# Show training data.
 	features, targets = get_xor_training_data()

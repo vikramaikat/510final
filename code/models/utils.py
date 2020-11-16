@@ -48,6 +48,7 @@ def plot_loss(loss_values, img_fn='loss.pdf'):
 	plt.savefig(img_fn)
 	plt.close('all')
 
+
 def plot_performance(loss_values, time_values, data_samples, img1_fn='ovd.pdf', img2_fn='dvt.pdf', img3_fn='convergence.pdf'):
 	"""Make a loss plot: log MSE by epoch"""
 	_, ax = plt.subplots(figsize=(3.5,3))
@@ -84,6 +85,8 @@ def plot_performance(loss_values, time_values, data_samples, img1_fn='ovd.pdf', 
 	plt.tight_layout()
 	plt.savefig(img3_fn)
 	plt.close('all')
+
+
 
 if __name__ == '__main__':
 	pass
