@@ -38,24 +38,34 @@ def make_dense_net(layer_dims, include_no_op=True, include_last_relu=True):
 def plot_loss(train_loss, train_time, test_loss, test_time, test_epoch, \
 	img_fn='loss.pdf'):
 	"""
-	Make a loss plot: log MSE by epoch and log MSE by time.
+	Make a loss plot:
+		-log MSE by epoch
+		-log MSE by time
+		-time per epoch by epoch
 
 	Assumes train loss is recorded every epoch.
 	"""
-	_, axarr = plt.subplots(ncols=2, figsize=(5,3), sharey=True)
-	axarr[0].plot(1.0 + np.arange(len(train_loss)), np.log(train_loss), \
+	_, axarr = plt.subplots(ncols=3, figsize=(6.5,3))
+	train_epoch = 1.0 + np.arange(len(train_loss))
+	axarr[0].plot(train_epoch, np.log(train_loss), \
 			c='b', alpha=0.7, lw=0.7)
 	axarr[0].plot(test_epoch, np.log(test_loss), c='r', alpha=0.7, lw=0.7)
 	axarr[1].plot(train_time, np.log(train_loss), c='b', alpha=0.7, lw=0.7, \
 			label='Train')
 	axarr[1].plot(test_time, np.log(test_loss), c='r', alpha=0.7, lw=0.7, \
 			label='Test')
+	train_time_per_epoch = 1e3 * np.diff(train_time)
+	axarr[2].plot(train_epoch[1:], train_time_per_epoch, c='b', alpha=0.7, lw=0.7)
 	for ax in axarr:
 		for direction in ['top', 'right']:
 			ax.spines[direction].set_visible(False)
 	axarr[0].set_ylabel('log MSE')
 	axarr[0].set_xlabel('Epoch')
+	axarr[0].set_ylabel('log MSE')
 	axarr[1].set_xlabel('Time (s)')
+	axarr[2].set_xlabel('Epoch')
+	axarr[2].set_ylabel('Time per Epoch (ms)')
+	axarr[2].set_ylim(0.0, None)
 	plt.sca(axarr[1])
 	plt.legend(loc='upper right')
 	plt.tight_layout()

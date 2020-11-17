@@ -52,7 +52,7 @@ def get_xor_training_data(n_samples=100, seed=42, std_dev=0.5):
 
 
 def plot_model_predictions(model, max_x=3, grid_points=80, \
-	img_fn='xor_predictions.pdf'):
+	img_fn='xor_predictions.pdf', n_samples=100, seed=42):
 	"""
 	Plot the model predictions on the XOR dataset.
 
@@ -78,7 +78,7 @@ def plot_model_predictions(model, max_x=3, grid_points=80, \
 			interpolation='bicubic', cmap='viridis', vmin=vmin, vmax=vmax)
 	plt.colorbar()
 	# Show training data.
-	features, targets = get_xor_training_data()
+	features, targets = get_xor_training_data(n_samples=n_samples, seed=seed)
 	features, targets = features.numpy(), targets.numpy().flatten()
 	idx_0 = np.argwhere(targets == 0)
 	idx_1 = np.argwhere(targets == 1)

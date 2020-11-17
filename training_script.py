@@ -8,21 +8,28 @@ import sys
 import torch
 
 from code.data.xor_data import get_xor_training_data, plot_model_predictions
-from code.models.gpipe_model import GpipeModel
+
 from code.models.basic_distributed_model import BasicDistributedModel
+from code.models.prof_basic_distributed_model import ProfBasicDistributedModel
+from code.models.gpipe_model import GpipeModel
+from code.models.prof_gpipe_model import ProfGpipeModel
 from code.models.refinement_model import RefinementModel
+from code.models.prof_refinement_model import ProfRefinementModel
 
 
 BATCH_SIZE = 25
-NUM_BATCHES = 4
+NUM_BATCHES = 8
 DSET_SIZE = BATCH_SIZE * NUM_BATCHES
 NET_DIMS = [[2,10,10], [10,10,10], [10,10,1]]
 MODEL_OPTIONS = {
 	1: BasicDistributedModel,
-	2: GpipeModel,
-	3: RefinementModel,
+	2: ProfBasicDistributedModel,
+	3: GpipeModel,
+	4: ProfGpipeModel,
+	5: RefinementModel,
+	6: ProfRefinementModel,
 }
-USAGE_STR = "Usage:\n"
+USAGE_STR = "Usage\n-----\n"
 USAGE_STR += "$ python training_script.py [model_type]\n\tmodel_type options:\n"
 for option in sorted(MODEL_OPTIONS.keys()):
 	USAGE_STR += '\t' + str(option) + ': ' + str(MODEL_OPTIONS[option]) +'\n'
@@ -86,7 +93,7 @@ if __name__ == '__main__':
 	# Train.
 	train_loop(model, loaders)
 	# Plot.
-	plot_model_predictions(model)
+	plot_model_predictions(model, n_samples=DSET_SIZE, seed=42)
 	# Clean up.
 	model.join()
 
