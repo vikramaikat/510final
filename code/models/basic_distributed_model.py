@@ -192,6 +192,7 @@ class BasicDistributedModel(DistributedModel):
 		# Send targets to the last cell.
 		self.pipes[-1][1].send(y)
 		_ = self.pipes[0][0].recv() # Wait for gradients to come back.
+		return _
 
 
 	def join(self):
