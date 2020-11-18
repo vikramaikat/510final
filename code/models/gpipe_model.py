@@ -22,7 +22,8 @@ FORWARD_FLAG = 2
 
 
 
-def mp_target_func(net_dims, parent_conn, child_conn, final_layer, num_batches):
+def mp_target_func(net_dims, parent_conn, child_conn, final_layer, num_batches,\
+	seed):
 	"""
 	Spawn a torch.nn.Module and wait for data.
 
@@ -36,9 +37,11 @@ def mp_target_func(net_dims, parent_conn, child_conn, final_layer, num_batches):
 	child_conn : multiprocessing.connection.Connection
 	final_layer : bool
 	num_batches : int
+	seed : bool
 	"""
 	# Make a network.
-	net = make_dense_net(net_dims, include_last_relu=(not final_layer))
+	net = make_dense_net(net_dims, include_last_relu=(not final_layer), \
+			seed=seed)
 	# Make an optimizer.
 	optimizer = torch.optim.Adam(net.parameters(), lr=LR)
 	# Enter main loop.
@@ -157,12 +160,13 @@ class GpipeModel(DistributedModel):
 	Trained with standard backprop, but with staggered "microbatches".
 	"""
 
-	def __init__(self, net_dims, num_batches):
+	def __init__(self, net_dims, num_batches, seed=False):
 		"""
 		Parameters
 		----------
 		net_dims : list of list of int
 		num_batches : int
+		seed : bool, optional
 		"""
 		super(GpipeModel, self).__init__()
 		assert len(net_dims) > 1
@@ -183,6 +187,7 @@ class GpipeModel(DistributedModel):
 							conn_2,
 							final_layer,
 							self.num_batches,
+							seed,
 					),
 			)
 			self.processes.append(p)
@@ -216,9 +221,14 @@ class GpipeModel(DistributedModel):
 		self.pipes[0][0].send((TRAIN_FLAG, x))
 		# Send targets to the last cell.
 		self.pipes[-1][1].send(y)
-		if wait:
+		if wait: # Wait for gradients to come back.
+			all_grads = []
 			for i in range(self.num_batches):
-				_ = self.pipes[0][0].recv() # Wait for gradients to come back.
+				grads = self.pipes[0][0].recv()
+				if return_grads:
+					all_grads.append(grads)
+		if return_grads:
+			return all_grads
 
 
 	def join(self):

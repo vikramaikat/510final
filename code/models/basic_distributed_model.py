@@ -89,7 +89,7 @@ def mp_target_func(net_dims, parent_conn, child_conn, final_layer, num_batches,
 					# Perform the backward pass.
 					output.backward(gradient=grads)
 				# Pass gradients back.
-				parent_conn.send(net[0].bias.grad[:])
+				parent_conn.send(net[0].bias.grad)
 				# Update this module's parameters.
 				optimizer.step()
 				# And zero out the NoOp layer.
@@ -198,7 +198,7 @@ class BasicDistributedModel(DistributedModel):
 		self.pipes[-1][1].send(y)
 		grads = self.pipes[0][0].recv() # Wait for gradients to come back.
 		if return_grads:
-			return grads[:]
+			return grads
 
 
 	def join(self):

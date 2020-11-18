@@ -24,7 +24,7 @@ TEST_FORWARD_FLAG = 2
 
 
 def mp_target_func(net_dims, parent_conn, child_conn, target_conn, final_layer,\
-	num_batches, layer_num, target_dim):
+	num_batches, layer_num, target_dim, seed):
 	"""
 	Spawn a torch.nn.Module and wait for data.
 
@@ -40,9 +40,12 @@ def mp_target_func(net_dims, parent_conn, child_conn, target_conn, final_layer,\
 	final_layer : bool
 	num_batches : int
 	layer_num : int
+	target_dim : int
+	seed : bool
 	"""
 	# Make a network.
-	net = make_dense_net(net_dims, include_last_relu=(not final_layer))
+	net = make_dense_net(net_dims, include_last_relu=(not final_layer), \
+			seed=seed)
 	if final_layer:
 		# Define parameters.
 		params = net.parameters()
@@ -210,12 +213,13 @@ class RefinementModel(DistributedModel):
 
 	"""
 
-	def __init__(self, net_dims, num_batches):
+	def __init__(self, net_dims, num_batches, seed=False):
 		"""
 		Parameters
 		----------
 		net_dims : list of list of int
 		num_batches : int
+		seed : bool, optional
 		"""
 		super(RefinementModel, self).__init__()
 		assert len(net_dims) > 1
@@ -242,6 +246,7 @@ class RefinementModel(DistributedModel):
 							self.num_batches,
 							i,
 							net_dims[-1][-1],
+							seed,
 					),
 			)
 			self.processes.append(p)

@@ -1,10 +1,10 @@
 """
-Test suite for distributed models.
+Test suite for Gpipe model.
 
 Contains
 --------
-* test_basic_distributed_model_activations
-* test_basic_distributed_model_gradients
+* test_gpipe_model_activations
+* test_gpipe_model_gradients
 
 """
 __date__ = "November 2020"
@@ -15,7 +15,6 @@ import torch
 import unittest
 
 from code.models.gpipe_model import GpipeModel
-from code.models.basic_distributed_model import BasicDistributedModel
 from code.models.non_distributed_model import NonDistributedModel
 
 
@@ -25,9 +24,9 @@ NET_DIMS = [[2,10,10], [10,10,1]]
 
 
 
-class DistributedModelTestCases(unittest.TestCase):
+class GpipeModelTestCases(unittest.TestCase):
 
-	def test_basic_distributed_model_activations(self):
+	def test_gpipe_model_activations(self):
 		# Define the inputs.
 		input_1 = torch.randn(BATCH_SIZE, NET_DIMS[0][0])
 		input_2 = input_1[:]
@@ -35,21 +34,21 @@ class DistributedModelTestCases(unittest.TestCase):
 		# Make the ground truth model and get activations.
 		model_1 = NonDistributedModel(NET_DIMS, seed=True)
 		with torch.no_grad():
-			output_1 = model_1(input_1).detach().cpu().numpy()
+			output_1 = model_1(input_1).cpu().numpy()
 
 		# Make the distributed model and get activations.
-		model_2 = BasicDistributedModel(NET_DIMS, NUM_BATCHES, seed=True)
+		model_2 = GpipeModel(NET_DIMS, NUM_BATCHES, seed=True)
 		with torch.no_grad():
-			output_2 = model_2(input_2).detach().cpu().numpy()
+			output_2 = model_2(input_2).cpu().numpy()
 		model_2.join()
 
 		self.assertTrue( \
 				np.allclose(output_1, output_2),
-				msg="Network ouputs aren't equal!",
+				msg="GpipeModel: Network ouputs aren't equal!",
 		)
 
 
-	def test_basic_distributed_model_gradients(self):
+	def test_gpipe_model_gradients(self):
 		# Define the inputs.
 		input_1 = torch.randn(BATCH_SIZE, NET_DIMS[0][0])
 		input_2 = input_1[:]
@@ -57,9 +56,11 @@ class DistributedModelTestCases(unittest.TestCase):
 		target_2 = target_1[:]
 
 		# Make the distributed model and get the gradients.
-		model_2 = BasicDistributedModel(NET_DIMS, NUM_BATCHES, seed=True)
-		grad_2 = model_2.forward_backward(input_2, target_2, return_grads=True)
-		grad_2 = grad_2.detach().cpu().numpy()
+		model_2 = GpipeModel(NET_DIMS, 1, seed=True)
+		grad_2 = model_2.forward_backward(input_2, target_2, wait=True, \
+				return_grads=True)
+		grad_2 = grad_2[0].cpu().numpy()
+		# print("grad_2", grad_2.shape)
 		model_2.join()
 
 		# Make the ground truth model and get the gradients.
@@ -69,21 +70,13 @@ class DistributedModelTestCases(unittest.TestCase):
 
 		self.assertTrue( \
 				np.allclose(grad_1, grad_2),
-				msg="Network gradients aren't equal!",
+				msg="GpipeModel: Network gradients aren't equal!",
 		)
-
-
-	def test_gpipe_model_activations(self):
-		pass
-
-
-
 
 
 
 
 if __name__ == '__main__':
-	# Run the tests defined in DistributedModelTestCases.
 	unittest.main()
 
 
