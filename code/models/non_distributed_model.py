@@ -45,6 +45,7 @@ class NonDistributedModel(torch.nn.Module):
 			return self.net[0].bias.grad
 
 
+
 if __name__ == '__main__':
 	pass
 

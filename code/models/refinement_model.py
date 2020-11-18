@@ -142,13 +142,14 @@ def mp_target_func(net_dims, parent_conn, child_conn, target_conn, final_layer,\
 
 					# Perform a backward pass.
 					loss.backward(retain_graph=True)
+					assert net[0].bias is not None
 					gradient_count = 1 # Count the number of backward calls.
 					# Collect gradients from our children.
 					while True:
 						# Send gradients backward if they're needed.
 						if layer_num > 0 and counter > 0:
 							parent_conn.send((counter-1, net[0].bias.grad))
-							net[0].zero()
+							net[0].bias.grad.fill_(0.0)
 						# Break when we're not getting gradients again.
 						if counter <= 1:
 							break

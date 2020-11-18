@@ -205,7 +205,7 @@ def mp_target_func(net_dims, parent_conn, child_conn, target_conn, final_layer,\
 						if layer_num > 0 and counter > 0:
 							parent_conn.send((counter-1, net[0].bias.grad))
 							tic = time.perf_counter()
-							net[0].zero()
+							net[0].bias.grad.fill_(0.0)
 							toc = time.perf_counter()
 							prof['zero_no_op'] += toc - tic
 						# Break when we're not getting gradients again.
