@@ -7,8 +7,11 @@ __date__ = "November 2020"
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+import torch.utils.data
+
 
 N_PLOT_IMGS = 4
+
 
 
 def get_mnist_training_data(n_samples=100, seed=42, fn='mnist_test.csv', \

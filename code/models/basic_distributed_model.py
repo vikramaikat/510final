@@ -7,6 +7,7 @@ __date__ = "October - November 2020"
 
 import multiprocessing as mp
 import numpy as np
+import os
 import torch
 import time
 
@@ -138,13 +139,14 @@ class BasicDistributedModel(DistributedModel):
 
 	"""
 
-	def __init__(self, net_dims, num_batches, seed=False):
+	def __init__(self, net_dims, num_batches, seed=False, cpu_affinity=False):
 		"""
 		Parameters
 		----------
 		net_dims : list of list of int
 		num_batches : int
 		seed : bool, optional
+		cpu_affinity : bool, optional
 		"""
 		super(BasicDistributedModel, self).__init__()
 		self.num_batches = num_batches
@@ -168,7 +170,18 @@ class BasicDistributedModel(DistributedModel):
 					),
 			)
 			self.processes.append(p)
+		# Pin the processes to specific CPUs.
+		if cpu_affinity:
+			# First pin ourselves down to a CPU.
+			cpu_count = os.cpu_count()
+			os.system("taskset -p -c %d %d" % (-1 % cpu_count, os.getpid()))
+		# Release the processes into the wild.
+		for p in self.processes:
 			p.start()
+		# Then pin everyone else down in a round-robin.
+		if cpu_affinity:
+			for i, p in enumerate(self.processes):
+				os.system("taskset -p -c %d %d" % (i % cpu_count, p.pid))
 
 
 	def forward(self, x):

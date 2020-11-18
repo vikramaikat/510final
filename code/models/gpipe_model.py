@@ -7,6 +7,7 @@ __date__ = "October - November 2020"
 
 import multiprocessing as mp
 import numpy as np
+import os
 import time
 import torch
 
@@ -131,6 +132,8 @@ def mp_target_func(net_dims, parent_conn, child_conn, final_layer, num_batches,\
 				child_conn.send(None) # Tell the main process we're done.
 				continue
 
+		assert epoch_flag == TRAIN_FLAG
+
 		# Zero gradients.
 		optimizer.zero_grad()
 
@@ -138,14 +141,15 @@ def mp_target_func(net_dims, parent_conn, child_conn, final_layer, num_batches,\
 		for batch in range(num_batches-1,-1,-1):
 			# Perform the backward pass.
 			if final_layer:
-				microbatch_losses[batch].backward()
+				microbatch_losses[batch].backward(retain_graph=True)
 			else:
 				grads = child_conn.recv()
-				outputs[batch].backward(gradient=grads)
+				outputs[batch].backward(gradient=grads, retain_graph=True)
 			# Pass gradients back to the parent.
 			parent_conn.send(net[0].bias.grad)
 			# And zero out the NoOp layer.
-			net[0].zero()
+			net[0].bias.grad = torch.zeros_like(net[0].bias.grad)
+			# net[0].bias = None
 		# Update this module's parameters.
 		optimizer.step()
 		# And zero out the NoOp layer.
@@ -160,13 +164,14 @@ class GpipeModel(DistributedModel):
 	Trained with standard backprop, but with staggered "microbatches".
 	"""
 
-	def __init__(self, net_dims, num_batches, seed=False):
+	def __init__(self, net_dims, num_batches, seed=False, cpu_affinity=False):
 		"""
 		Parameters
 		----------
 		net_dims : list of list of int
 		num_batches : int
 		seed : bool, optional
+		cpu_affinity : bool, optional
 		"""
 		super(GpipeModel, self).__init__()
 		assert len(net_dims) > 1
@@ -191,8 +196,18 @@ class GpipeModel(DistributedModel):
 					),
 			)
 			self.processes.append(p)
-			# Release the process into the wild.
+		# Pin the processes to specific CPUs.
+		if cpu_affinity:
+			# First pin ourselves down to a CPU.
+			cpu_count = os.cpu_count()
+			os.system("taskset -p -c %d %d" % (-1 % cpu_count, os.getpid()))
+		# Release the processes into the wild.
+		for p in self.processes:
 			p.start()
+		# Then pin everyone else down in a round-robin.
+		if cpu_affinity:
+			for i, p in enumerate(self.processes):
+				os.system("taskset -p -c %d %d" % (i % cpu_count, p.pid))
 
 
 	def forward(self, x):
