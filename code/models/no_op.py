@@ -22,7 +22,7 @@ class NoOp(torch.nn.Module):
 
 	def zero(self):
 		"""Zero out the gradients."""
-		self.bias.grad.fill_(0.0)
+		self.bias = None
 
 
 

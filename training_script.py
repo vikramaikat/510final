@@ -1,6 +1,23 @@
 """
 Train a distributed model.
 
+Usage
+-----
+$ python training_script.py [model_type]
+	model_type options:
+	1: <class 'code.models.basic_distributed_model.BasicDistributedModel'>
+	2: <class 'code.models.prof_basic_distributed_model.ProfBasicDistributedModel'>
+	3: <class 'code.models.gpipe_model.GpipeModel'>
+	4: <class 'code.models.prof_gpipe_model.ProfGpipeModel'>
+	5: <class 'code.models.refinement_model.RefinementModel'>
+	6: <class 'code.models.prof_refinement_model.ProfRefinementModel'>
+
+Notes
+-----
+Two plots will be saved at the end of training:
+* loss.pdf
+* xor_predictions.pdf
+
 """
 __date__ = "November 2020"
 
@@ -55,6 +72,9 @@ def get_test_train_loaders():
 def train_loop(model, loaders, epochs=1000, test_freq=10):
 	"""
 	Iterate through the data and take gradient steps.
+
+	Note: the `wait` parameter is for telling the GPipe models how many batches
+	to wait for before running the backward pass.
 
 	Parameters
 	----------

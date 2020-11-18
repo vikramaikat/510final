@@ -210,7 +210,7 @@ class GpipeModel(DistributedModel):
 			_ = self.pipes[-1][1].recv()
 
 
-	def forward_backward(self, x, y, wait=False):
+	def forward_backward(self, x, y, wait=False, return_grads=False):
 		"""Both forward and backward passes."""
 		# Send features to the first cell.
 		self.pipes[0][0].send((TRAIN_FLAG, x))

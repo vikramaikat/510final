@@ -13,7 +13,8 @@ from .no_op import NoOp
 
 
 
-def make_dense_net(layer_dims, include_no_op=True, include_last_relu=True):
+def make_dense_net(layer_dims, include_no_op=True, include_last_relu=True, \
+	seed=False):
 	"""
 	Make a network with ReLUs and dense layers.
 
@@ -23,12 +24,16 @@ def make_dense_net(layer_dims, include_no_op=True, include_last_relu=True):
 		List of layer dimensions
 	include_no_op : bool, optional
 	include_last_relu : bool, optional
+	seed: None or int, optional
 	"""
 	assert len(layer_dims) >= 2
 	layer_list = []
 	if include_no_op:
 		layer_list.append(NoOp(layer_dims[0]))
 	for i in range(len(layer_dims)-1):
+		if seed:
+			# Seed each layer based on its dimensions.
+			torch.manual_seed(hash((layer_dims[i], layer_dims[i+1])))
 		layer_list.append(torch.nn.Linear(layer_dims[i], layer_dims[i+1]))
 		if include_last_relu or i != len(layer_dims)-2:
 			layer_list.append(torch.nn.ReLU())
