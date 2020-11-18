@@ -20,11 +20,12 @@ LR = 1e-3 # learning rate
 TRAIN_FLAG = 0
 TEST_FLAG = 1
 FORWARD_FLAG = 2
+PRINT_FREQ = 10
 
 
 
 def mp_target_func(net_dims, parent_conn, child_conn, final_layer, num_batches,\
-	seed):
+	seed, save_fn):
 	"""
 	Spawn a torch.nn.Module and wait for data.
 
@@ -39,6 +40,7 @@ def mp_target_func(net_dims, parent_conn, child_conn, final_layer, num_batches,\
 	final_layer : bool
 	num_batches : int
 	seed : bool
+	save_fn : None or str
 	"""
 	# Make a network.
 	net = make_dense_net(net_dims, include_last_relu=(not final_layer), \
@@ -66,6 +68,17 @@ def mp_target_func(net_dims, parent_conn, child_conn, final_layer, num_batches,\
 				if final_layer:
 					plot_loss(train_loss_values, train_loss_times, \
 							test_loss_values, test_loss_times, test_loss_epochs)
+					if save_fn is not None:
+						np.save( \
+							save_fn,
+							{
+								'train_loss': train_loss_values,
+								'train_time': train_loss_times,
+								'test_loss': test_loss_values,
+								'test_time': test_loss_times,
+								'test_epochs': test_loss_epochs,
+							}
+						)
 				# Then propogate the death signal.
 				child_conn.send((None,None))
 				return
@@ -122,7 +135,7 @@ def mp_target_func(net_dims, parent_conn, child_conn, final_layer, num_batches,\
 				train_loss_values.append(epoch_loss)
 				train_loss_times.append(elapsed_time)
 				# Print out a loss.
-				if epoch % 100 == 0:
+				if epoch % PRINT_FREQ == 0:
 					print("epoch:", epoch ,"loss:", epoch_loss, \
 							"time:", elapsed_time)
 			else:
@@ -164,7 +177,8 @@ class GpipeModel(DistributedModel):
 	Trained with standard backprop, but with staggered "microbatches".
 	"""
 
-	def __init__(self, net_dims, num_batches, seed=False, cpu_affinity=False):
+	def __init__(self, net_dims, num_batches, seed=False, cpu_affinity=False,
+		save_fn=None):
 		"""
 		Parameters
 		----------
@@ -193,6 +207,7 @@ class GpipeModel(DistributedModel):
 							final_layer,
 							self.num_batches,
 							seed,
+							save_fn,
 					),
 			)
 			self.processes.append(p)

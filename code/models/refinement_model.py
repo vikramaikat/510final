@@ -21,11 +21,12 @@ from .utils import make_dense_net, plot_loss, plot_performance
 LR = 1e-3 # learning rate
 FORWARD_FLAG = 1
 TEST_FORWARD_FLAG = 2
+PRINT_FREQ = 10
 
 
 
 def mp_target_func(net_dims, parent_conn, child_conn, target_conn, final_layer,\
-	num_batches, layer_num, target_dim, seed):
+	num_batches, layer_num, target_dim, seed, save_fn):
 	"""
 	Spawn a torch.nn.Module and wait for data.
 
@@ -43,6 +44,7 @@ def mp_target_func(net_dims, parent_conn, child_conn, target_conn, final_layer,\
 	layer_num : int
 	target_dim : int
 	seed : bool
+	save_fn : None or str
 	"""
 	# Make a network.
 	net = make_dense_net(net_dims, include_last_relu=(not final_layer), \
@@ -80,6 +82,17 @@ def mp_target_func(net_dims, parent_conn, child_conn, target_conn, final_layer,\
 				if final_layer:
 					plot_loss(train_loss_values, train_loss_times, \
 							test_loss_values, test_loss_times, test_loss_epochs)
+					if save_fn is not None:
+						np.save( \
+							save_fn,
+							{
+								'train_loss': train_loss_values,
+								'train_time': train_loss_times,
+								'test_loss': test_loss_values,
+								'test_time': test_loss_times,
+								'test_epochs': test_loss_epochs,
+							}
+						)
 				# Then propogate the None signal.
 				child_conn.send((None,None,None))
 				return
@@ -196,7 +209,7 @@ def mp_target_func(net_dims, parent_conn, child_conn, target_conn, final_layer,\
 			train_loss_values.append(epoch_loss)
 			train_loss_times.append(elapsed_time)
 			# Print out a loss.
-			if final_layer and backwards_flag and (epoch % 100 == 0):
+			if final_layer and backwards_flag and (epoch % PRINT_FREQ == 0):
 				print("epoch:", epoch ,"loss:", epoch_loss, \
 						"time:", elapsed_time)
 		else:
@@ -215,7 +228,8 @@ class RefinementModel(DistributedModel):
 
 	"""
 
-	def __init__(self, net_dims, num_batches, seed=False, cpu_affinity=False):
+	def __init__(self, net_dims, num_batches, seed=False, cpu_affinity=False,
+		save_fn=None):
 		"""
 		Parameters
 		----------
@@ -223,6 +237,7 @@ class RefinementModel(DistributedModel):
 		num_batches : int
 		seed : bool, optional
 		cpu_affinity : bool, optional
+		save_fn : None or str, optional
 		"""
 		super(RefinementModel, self).__init__()
 		assert len(net_dims) > 1
@@ -250,6 +265,7 @@ class RefinementModel(DistributedModel):
 							i,
 							net_dims[-1][-1],
 							seed,
+							save_fn,
 					),
 			)
 			self.processes.append(p)

@@ -20,6 +20,7 @@ LR = 1e-3 # learning rate
 TRAIN_FLAG = 0
 TEST_FLAG = 1
 FORWARD_FLAG = 2
+PRINT_FREQ = 10
 PROFILING_CATEGORIES = [
 	'zero_grad',
 	'zero_no_op',
@@ -28,11 +29,13 @@ PROFILING_CATEGORIES = [
 	'blocked',
 	'optim',
 	'logging',
+	'wall_clock',
 ]
 
 
 
-def mp_target_func(net_dims, parent_conn, child_conn, final_layer, num_batches):
+def mp_target_func(net_dims, parent_conn, child_conn, final_layer, num_batches,
+	save_fn):
 	"""
 	Spawn a torch.nn.Module and wait for data.
 
@@ -46,6 +49,7 @@ def mp_target_func(net_dims, parent_conn, child_conn, final_layer, num_batches):
 	child_conn : multiprocessing.connection.Connection
 	final_layer : bool
 	num_batches : int
+	save_fn : None or str
 	"""
 	# Make a network.
 	net = make_dense_net(net_dims, include_last_relu=(not final_layer))
@@ -82,10 +86,25 @@ def mp_target_func(net_dims, parent_conn, child_conn, final_layer, num_batches):
 					assert type(incoming_prof) == type({})
 					for key in prof:
 						prof[key] += incoming_prof[key]
+				else:
+					# Add the wall-clock time.
+					prof['wall_clock'] = time.perf_counter() - start_time
 				# If we're in the last layer, also report the profiling results.
 				if final_layer:
 					print("Total profiling times:")
 					print(prof)
+					if save_fn is not None:
+						np.save( \
+							save_fn,
+							{
+								'train_loss': train_loss_values,
+								'train_time': train_loss_times,
+								'test_loss': test_loss_values,
+								'test_time': test_loss_times,
+								'test_epochs': test_loss_epochs,
+								'profiling': prof,
+							}
+						)
 					# Then propogate the None signal.
 					child_conn.send((None, None))
 				else:
@@ -157,7 +176,7 @@ def mp_target_func(net_dims, parent_conn, child_conn, final_layer, num_batches):
 				train_loss_values.append(epoch_loss)
 				train_loss_times.append(elapsed_time)
 				# Print out a loss.
-				if epoch % 100 == 0:
+				if epoch % PRINT_FREQ == 0:
 					print("epoch:", epoch ,"loss:", epoch_loss, \
 							"time:", elapsed_time)
 			else:
@@ -221,13 +240,14 @@ class ProfGpipeModel(DistributedModel):
 	Trained with standard backprop, but with staggered "microbatches".
 	"""
 
-	def __init__(self, net_dims, num_batches, cpu_affinity=False):
+	def __init__(self, net_dims, num_batches, cpu_affinity=False, save_fn=None):
 		"""
 		Parameters
 		----------
 		net_dims : list of list of int
 		num_batches : int
 		cpu_affinity : bool, optional
+		save_fn : None or str, optional
 		"""
 		super(ProfGpipeModel, self).__init__()
 		assert len(net_dims) > 1
@@ -248,6 +268,7 @@ class ProfGpipeModel(DistributedModel):
 							conn_2,
 							final_layer,
 							self.num_batches,
+							save_fn,
 					),
 			)
 			self.processes.append(p)

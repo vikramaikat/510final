@@ -6,3 +6,4 @@ code/data/__pycache__
 .idea*
 __pycache__/
 *.csv
+*.npy
