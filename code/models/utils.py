@@ -24,7 +24,7 @@ def make_dense_net(layer_dims, include_no_op=True, include_last_relu=True, \
 		List of layer dimensions
 	include_no_op : bool, optional
 	include_last_relu : bool, optional
-	seed: None or int, optional
+	seed: bool, optional
 	"""
 	assert len(layer_dims) >= 2
 	layer_list = []
@@ -60,7 +60,8 @@ def plot_loss(train_loss, train_time, test_loss, test_time, test_epoch, \
 	axarr[1].plot(test_time, np.log(test_loss), c='r', alpha=0.7, lw=0.7, \
 			label='Test')
 	train_time_per_epoch = 1e3 * np.diff(train_time)
-	axarr[2].plot(train_epoch[1:], train_time_per_epoch, c='b', alpha=0.7, lw=0.7)
+	axarr[2].plot(train_epoch[1:], train_time_per_epoch, c='b', alpha=0.7, \
+			lw=0.7)
 	for ax in axarr:
 		for direction in ['top', 'right']:
 			ax.spines[direction].set_visible(False)

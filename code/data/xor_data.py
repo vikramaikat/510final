@@ -50,8 +50,22 @@ def get_xor_training_data(n_samples=100, seed=42, std_dev=0.5):
 	return features, targets
 
 
+def get_xor_loaders(n_samples=100, batch_size=25):
+	"""Get XOR data test/train loaders."""
+	# Make train loader.
+	features, targets = get_xor_training_data(n_samples=n_samples, seed=42)
+	dset = torch.utils.data.TensorDataset(features, targets)
+	train_loader = torch.utils.data.DataLoader(dset, batch_size=batch_size, \
+			shuffle=True)
+	# Make test loader.
+	features, targets = get_xor_training_data(n_samples=n_samples, seed=43)
+	dset = torch.utils.data.TensorDataset(features, targets)
+	test_loader = torch.utils.data.DataLoader(dset, batch_size=batch_size, \
+			shuffle=True)
+	return {'train': train_loader, 'test': test_loader}
 
-def plot_model_predictions(model, max_x=3, grid_points=80, \
+
+def plot_model_xor_predictions(model, max_x=3, grid_points=80, \
 	img_fn='xor_predictions.pdf', n_samples=100, seed=42):
 	"""
 	Plot the model predictions on the XOR dataset.
