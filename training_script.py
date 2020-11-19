@@ -27,6 +27,7 @@ __date__ = "November 2020"
 import os
 import sys
 import torch
+torch.manual_seed(0)
 
 from code.data.xor_data import get_xor_loaders, plot_model_xor_predictions
 from code.data.mnist_data import get_mnist_loaders, plot_model_mnist_predictions
