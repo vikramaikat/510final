@@ -174,7 +174,8 @@ def mp_target_func(net_dims, parent_conn, child_conn, target_conn, final_layer,\
 					prof['backward'] += toc - tic
 					# Pass gradients back.
 					if counter > 0:
-						parent_conn.send((counter-1, net[0].bias.grad))
+						# True denotes final gradients.
+						parent_conn.send((True,counter-1, net[0].bias.grad))
 					# Update this module's parameters.
 					tic = time.perf_counter()
 					optimizer.step()
@@ -219,20 +220,22 @@ def mp_target_func(net_dims, parent_conn, child_conn, target_conn, final_layer,\
 					prof['backward'] += toc - tic
 					gradient_count = 1 # Count the number of backward calls.
 					# Collect gradients from our children.
+					final_gradient = False
 					while True:
 						# Send gradients backward if they're needed.
 						if layer_num > 0 and counter > 0:
-							parent_conn.send((counter-1, net[0].bias.grad))
+							parent_conn.send((final_gradient, counter-1, \
+									net[0].bias.grad))
 							tic = time.perf_counter()
 							net[0].bias.grad.fill_(0.0)
 							toc = time.perf_counter()
 							prof['zero_no_op'] += toc - tic
 						# Break when we're not getting gradients again.
-						if counter <= 1:
+						if final_gradient or counter <= 1:
 							break
 						# Receive gradients.
 						tic = time.perf_counter()
-						counter, grads = child_conn.recv()
+						final_gradient, counter, grads = child_conn.recv()
 						toc = time.perf_counter()
 						prof['blocked'] += toc - tic
 						# Perform the backward pass.

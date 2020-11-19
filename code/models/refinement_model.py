@@ -128,7 +128,8 @@ def mp_target_func(net_dims, parent_conn, child_conn, target_conn, final_layer,\
 					loss.backward()
 					# Pass gradients back.
 					if counter > 0:
-						parent_conn.send((counter-1, net[0].bias.grad))
+						# True denotes final gradients.
+						parent_conn.send((True, counter-1, net[0].bias.grad))
 					# Update this module's parameters.
 					optimizer.step()
 					# And zero out the NoOp layer.
@@ -159,16 +160,18 @@ def mp_target_func(net_dims, parent_conn, child_conn, target_conn, final_layer,\
 					assert net[0].bias is not None
 					gradient_count = 1 # Count the number of backward calls.
 					# Collect gradients from our children.
+					final_gradient = False
 					while True:
 						# Send gradients backward if they're needed.
 						if layer_num > 0 and counter > 0:
-							parent_conn.send((counter-1, net[0].bias.grad))
+							parent_conn.send((final_gradient, counter-1, \
+									net[0].bias.grad))
 							net[0].bias.grad.fill_(0.0)
 						# Break when we're not getting gradients again.
-						if counter <= 1:
+						if final_gradient or counter <= 1:
 							break
 						# Receive gradients.
-						counter, grads = child_conn.recv()
+						final_gradient, counter, grads = child_conn.recv()
 						# Perform the backward pass.
 						cell_output.backward(gradient=grads, retain_graph=True)
 						# Update the number of backward calls.
